@@ -70,7 +70,6 @@ app.post('/api/user/login', async (req, res) => {
       const notes = await dbnote.find({});
       res.json(notes);
     } catch (error) {
-      console.error('Error fetching notes:', error);
       res.status(500).json({ error: 'Internal Server Error' });
     }
   });
@@ -86,12 +85,11 @@ app.post('/api/notes/add', authenticateToken, async (req, res) => {
       
       res.status(201).json({ message: 'Anteckning sparad' });
     } catch (error) {
-      console.error('Error saving note:', error);
       res.status(500).json({ error: 'Serverfel' });
     }
   });
 
-// Ändra en anteckning (kräver autentisering)
+
 app.put('/api/notes/:id', authenticateToken, async (req, res) => {
     try {
       const { id } = req.params;
@@ -102,7 +100,6 @@ app.put('/api/notes/:id', authenticateToken, async (req, res) => {
   
       res.json({ message: 'Anteckning uppdaterad', updatedNote });
     } catch (error) {
-      console.error('Error updating note:', error);
       res.status(500).json({ error: 'Serverfel' });
     }
   });
@@ -120,24 +117,25 @@ app.delete('/api/notes/:id', authenticateToken, async (req, res) => {
         res.status(404).json({ error: 'Anteckning ej hittad' });
       }
     } catch (error) {
-      console.error('Error deleting note:', error);
       res.status(500).json({ error: 'Serverfel' });
     }
   });
 
-// Söka bland anteckningar (VG-krav)
-app.get("/api/notes/search", (req, res) => {
-    const searchtext = req.query.search;
-    var regexObj = new RegExp(searchtext);
-  
-    dbnote.find({ title: regexObj }, function (err, res) {
-      if (err) {
-        console.log(err);
-      } else {
-        res.render("search", { res });
-      }
-    });
-  });
+// Söka bland anteckningar
+app.get("/api/notes/search", authenticateToken, async (req, res) => {
+    const searchText = req.query.search;
+    const regexObj = new RegExp(searchText);
+
+    console.log("Regular Expression:", regexObj);
+    
+    try {
+        const foundNotes = await dbnote.find({ title: regexObj });
+        res.json({ results: foundNotes });
+    } catch (err) {
+      console.error("Database Error:", err); // Log any errors from dbnote.find() to consol
+        res.status(500).send("Internal Server Error");
+    }
+});
 
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
