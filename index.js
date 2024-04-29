@@ -20,7 +20,7 @@ const dbnote = new Datastore({ filename: 'note.db', autoload: true });
 function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
-  if (token == null) return res.sendStatus(401);
+  if (token == null) return res.status(401).json({ result: 'Authentication token missing' });
 
   jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, user) => {
     if (err) return res.sendStatus(403);
@@ -75,39 +75,60 @@ app.post('/api/user/login', async (req, res) => {
   });
 
 
-app.post('/api/notes/add', authenticateToken, async (req, res) => {
-    try {
-      const { title, text } = req.body;
-      const createdAt = new Date();
-      const modifiedAt = createdAt;
-      
-      await dbnote.insert({ title, text, createdAt, modifiedAt });
-      
-      res.status(201).json({ message: 'Anteckning sparad' });
-    } catch (error) {
-      res.status(500).json({ error: 'Serverfel' });
-    }
+  const MAX_TITLE = 50;
+  const MAX_TEXT = 300;
+  
+  app.post('/api/notes', authenticateToken, async (req, res) => {
+      try {
+          const { title, text } = req.body;
+  
+          
+          if (title.length > MAX_TITLE) {
+              return res.status(400).json({ error: 'Title is too long' });
+          }
+  
+          
+          if (text.length > MAX_TEXT) {
+              return res.status(400).json({ error: 'Text is too long' });
+          }
+  
+          const createdAt = new Date();
+          const modifiedAt = createdAt;
+  
+          await dbnote.insert({ title, text, createdAt, modifiedAt });
+  
+          res.status(201).json({ message: 'Anteckning sparad' });
+      } catch (error) {
+          res.status(500).json({ error: 'Serverfel' });
+      }
+  });
+  
+  app.put('/api/notes', authenticateToken, async (req, res) => {
+      try {
+          const { id } = req.query;
+          const { title, text } = req.body;
+  
+          if (title.length > MAX_TITLE) {
+              return res.status(400).json({ error: 'Title is too long' });
+          }
+          if (text.length > MAX_TEXT) {
+              return res.status(400).json({ error: 'Text is too long' });
+          }
+  
+          const modifiedAt = new Date();
+  
+          const updatedNote = await dbnote.update({ _id: id }, { $set: { title, text, modifiedAt } });
+  
+          res.json({ message: 'Anteckning uppdaterad', updatedNote });
+      } catch (error) {
+          res.status(500).json({ error: 'Serverfel' });
+      }
   });
 
 
-app.put('/api/notes/:id', authenticateToken, async (req, res) => {
+app.delete('/api/notes', authenticateToken, async (req, res) => {
     try {
-      const { id } = req.params;
-      const { title, text } = req.body;
-      const modifiedAt = new Date();
-  
-      const updatedNote = await dbnote.update({ _id: id }, { $set: { title, text, modifiedAt } });
-  
-      res.json({ message: 'Anteckning uppdaterad', updatedNote });
-    } catch (error) {
-      res.status(500).json({ error: 'Serverfel' });
-    }
-  });
-
-
-app.delete('/api/notes/:id', authenticateToken, async (req, res) => {
-    try {
-      const { id } = req.params;
+      const { id } = req.query;
   
       const remove = await dbnote.remove({ _id: id });
   
@@ -121,18 +142,18 @@ app.delete('/api/notes/:id', authenticateToken, async (req, res) => {
     }
   });
 
-// Söka bland anteckningar
-app.get("/api/notes/search", authenticateToken, async (req, res) => {
+  
+  app.get("/api/notes/search", authenticateToken, async (req, res) => {
     const searchText = req.query.search;
     const regexObj = new RegExp(searchText);
 
-    console.log("Regular Expression:", regexObj);
-    
     try {
         const foundNotes = await dbnote.find({ title: regexObj });
+        if (foundNotes.length === 0) {
+            return res.status(404).json({ result: 'No notes found' });
+        }
         res.json({ results: foundNotes });
     } catch (err) {
-      console.error("Database Error:", err); // Log any errors from dbnote.find() to consol
         res.status(500).send("Internal Server Error");
     }
 });
